@@ -22,12 +22,11 @@ class Network(object):
 
 
     def relu(self,x):
-        """TODO: Implement the relu function."""
-        raise NotImplementedError
+        return np.where(x < 0, 0, x)
 
     def relu_derivative(self,x):
-        """TODO: Implement the derivative of the relu function."""
-        raise NotImplementedError
+        derivative = np.array(x)
+        return np.where(derivative > 0, 1, 0)
 
 
     def cross_entropy_loss(self, logits, y_true):
@@ -44,8 +43,11 @@ class Network(object):
                     "y_true": numpy array of shape (batch_size,) containing the true labels of the batch
             Returns: a numpy array of shape (10,batch_size) where each column is the gradient of the loss with respect to y_pred (the output of the network before the softmax layer) for the given example.
         """
-        # TODO: Implement
-        raise NotImplementedError
+        batch_size = logits.shape[1]
+        softmax_output = softmax(logits, axis=0)
+        one_hot = np.eye(10)[y_true].T
+        gradient = -(one_hot - softmax_output) / batch_size
+        return gradient
 
 
     def forward_propagation(self, X):
@@ -57,24 +59,61 @@ class Network(object):
         ZL = 1
         forward_outputs = []
 
-        # TODO: Implement the forward function
-        raise NotImplementedError
+        forward_outputs.append([None, X, self.parameters['W1'], self.parameters['b1']])
+        current_activation = X
+
+        for layer_index in range(2, self.num_layers + 1):
+            weight = self.parameters['W' + str(layer_index - 1)]
+            bias = self.parameters['b' + str(layer_index - 1)]
+            v_l = np.dot(weight, current_activation) + bias
+            current_activation = self.relu(v_l)
+            forward_outputs.append([v_l, current_activation, self.parameters['W' + str(layer_index)],
+                                    self.parameters['b' + str(layer_index)]])
+
+        final_weight = self.parameters['W' + str(self.num_layers)]
+        final_bias = self.parameters['b' + str(self.num_layers)]
+        ZL = np.dot(final_weight, current_activation) + final_bias
+
         return ZL, forward_outputs
 
     def backpropagation(self, ZL, Y, forward_outputs):
         """Implement the backward step of the backpropagation algorithm.
             Input: "ZL" -  numpy array of shape (10, batch_size), the output of the network on the input X (before the softmax layer)
                     "Y" - numpy array of shape (batch_size,) containing the labels of each example in the current batch.
-                    "forward_outputs" - list of length self.num_layers given by the output of the forward function
+                    "forward_outputs" - list of length self.nl given by the output of the forward function
             Returns: "grads" - dictionary containing the gradients of the loss with respect to the network parameters across the batch.
                                 grads["dW" + str(l)] is a numpy array of shape (sizes[l], sizes[l-1]),
                                 grads["db" + str(l)] is a numpy array of shape (sizes[l],1).
         
         """
         grads = {}
-        
-        #TODO: Implement the backward function
-        raise NotImplementedError
+        cross_entropy_grad = self.cross_entropy_derivative(ZL, Y)
+        delta = cross_entropy_grad
+
+        nl = self.num_layers
+        grads["dW" + str(nl)] = np.dot(delta, forward_outputs[nl - 1][1].T)
+        grads["db" + str(nl)] = np.sum(delta, axis=1, keepdims=True)
+
+        if nl == 1:
+            return grads
+
+        delta = np.dot(forward_outputs[nl-1][2].T, delta)
+        grads["dW" + str(nl - 1)] = (
+            np.dot(delta * self.relu_derivative(forward_outputs[nl-1][0]), forward_outputs[nl-2][1].T)
+        )
+        grads["db" + str(nl - 1)] = (
+            np.sum(delta * self.relu_derivative(forward_outputs[nl-1][0]), axis=1, keepdims=True)
+        )
+
+        for i in range(self.num_layers - 2, 0, -1):
+            delta = np.dot(forward_outputs[i][1].T, delta)
+            grads["dW" + str(i)] = (
+                np.dot(delta * self.relu_derivative(forward_outputs[i][0]), forward_outputs[i-1][1].T)
+            )
+            grads["db" + str(i)] = (
+                np.sum(delta * self.relu_derivative(forward_outputs[i][0]), axis=1, keepdims=True)
+            )
+
         return grads
 
 
